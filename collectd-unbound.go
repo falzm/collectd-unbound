@@ -65,7 +65,7 @@ func unboundStats(interval time.Duration) {
 				Values:   []api.Value{api.Gauge(value)},
 			}
 
-			exec.Putval.Dispatch(vl)
+			exec.Putval.Write(vl)
 		}
 
 		// Set scanner position to the beginning of the next line
