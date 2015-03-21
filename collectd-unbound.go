@@ -60,7 +60,7 @@ func unboundStats(interval time.Duration) {
 				TypeInstance: metric,
 			},
 			Time:     now,
-			Interval: exec.Interval(),
+			Interval: interval,
 			Values:   []api.Value{api.Gauge(value)},
 		}
 
