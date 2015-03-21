@@ -3,9 +3,10 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"log"
 	osExec "os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"collectd.org/api"
@@ -19,56 +20,50 @@ func main() {
 }
 
 func unboundStats(interval time.Duration) {
-	var (
-		err          error
-		metric       []byte
-		value        float64
-		pos, advance int
-		cmdStdOut    bytes.Buffer
-	)
-
+	buf := &bytes.Buffer{}
 	cmd := osExec.Command("/bin/sh", "-c", "unbound-control stats")
-	cmd.Stdout = &cmdStdOut
+	cmd.Stdout = buf
 
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("error: unable to execute unbound-control: %s\n", err)
-		return
+		log.Fatalf("unable to execute unbound-control: %v", err)
 	}
 
 	now := time.Now()
 
-	line := []byte{}
-	for pos < cmdStdOut.Len() {
-		if advance, line, err = bufio.ScanLines(cmdStdOut.Bytes()[pos:], true); err != nil {
-			fmt.Printf("error: unable to parse line: %s\n", err)
-			return
+	scanner := bufio.NewScanner(buf)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "total.") {
+			continue
 		}
 
-		if bytes.HasPrefix(line, []byte("total.")) {
-			splitLine := bytes.Split(line, []byte("="))
-			metric = bytes.Replace(bytes.TrimPrefix(splitLine[0], []byte("total.")), []byte("."), []byte("_"), -1)
-
-			if value, err = strconv.ParseFloat(string(splitLine[1]), 32); err != nil {
-				fmt.Printf("error: unable to parse metric value: %s\n", err)
-				continue
-			}
-
-			vl := api.ValueList{
-				Identifier: api.Identifier{
-					Host:         exec.Hostname(),
-					Plugin:       "unbound",
-					Type:         "gauge",
-					TypeInstance: string(metric),
-				},
-				Time:     now,
-				Interval: exec.Interval(),
-				Values:   []api.Value{api.Gauge(value)},
-			}
-
-			exec.Putval.Write(vl)
+		fields := strings.SplitN(line, "=", 2)
+		if len(fields) != 2 {
+			continue
 		}
 
-		// Set scanner position to the beginning of the next line
-		pos += advance
+		metric := fields[0]
+		metric = strings.TrimPrefix(metric, "total.")
+		metric = strings.Replace(metric, ".", "_", -1)
+
+		value, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			log.Printf("error: unable to parse metric value: %v", err)
+			continue
+		}
+
+		vl := api.ValueList{
+			Identifier: api.Identifier{
+				Host:         exec.Hostname(),
+				Plugin:       "unbound",
+				Type:         "gauge",
+				TypeInstance: metric,
+			},
+			Time:     now,
+			Interval: exec.Interval(),
+			Values:   []api.Value{api.Gauge(value)},
+		}
+
+		exec.Putval.Write(vl)
 	}
 }
