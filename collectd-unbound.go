@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"log"
 	osExec "os/exec"
 	"strconv"
@@ -16,10 +17,10 @@ import (
 func main() {
 	e := exec.NewExecutor()
 	e.VoidCallback(unboundStats, exec.Interval())
-	e.Run()
+	e.Run(context.Background())
 }
 
-func unboundStats(interval time.Duration) {
+func unboundStats(ctx context.Context, interval time.Duration) {
 	buf := &bytes.Buffer{}
 	cmd := osExec.Command("/bin/sh", "-c", "unbound-control stats")
 	cmd.Stdout = buf
@@ -52,7 +53,7 @@ func unboundStats(interval time.Duration) {
 			continue
 		}
 
-		vl := api.ValueList{
+		vl := &api.ValueList{
 			Identifier: api.Identifier{
 				Host:         exec.Hostname(),
 				Plugin:       "unbound",
@@ -64,6 +65,6 @@ func unboundStats(interval time.Duration) {
 			Values:   []api.Value{api.Gauge(value)},
 		}
 
-		exec.Putval.Write(vl)
+		exec.Putval.Write(ctx, vl)
 	}
 }
