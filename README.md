@@ -57,6 +57,8 @@ time.up=201805.946672
 time.elapsed=4.427567
 ```
 
+See the _STATISTIC COUNTERS_ section from the [unbound-control][4] command manpage for information regarding metrics signification.
+
 TODO
 ----
 
@@ -101,3 +103,4 @@ POSSIBILITY OF SUCH DAMAGE.
 [1]: https://collectd.org/
 [2]: https://collectd.org/documentation/manpages/collectd-exec.5.shtml
 [3]: https://github.com/octo/go-collectd/
+[4]: https://www.unbound.net/documentation/unbound-control.html
