@@ -22,7 +22,7 @@ func main() {
 
 func unboundStats(ctx context.Context, interval time.Duration) {
 	buf := &bytes.Buffer{}
-	cmd := osExec.Command("/bin/sh", "-c", "unbound-control stats")
+	cmd := osExec.Command("/bin/sh", "-c", "unbound-control stats_noreset")
 	cmd.Stdout = buf
 
 	if err := cmd.Run(); err != nil {
