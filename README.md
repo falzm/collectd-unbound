@@ -18,7 +18,7 @@ Once the `collectd-unbound` binary is compiled, copy it wherever you want and ad
 ```
 LoadPlugin exec
 <Plugin "exec">
-    Exec "unbound" "/usr/bin/collectd-exec-unbound"
+    Exec "unbound" "/usr/bin/collectd-unbound"
 </Plugin>
 ```
 
@@ -62,7 +62,6 @@ See the _STATISTIC COUNTERS_ section from the [unbound-control][4] command manpa
 TODO
 ----
 
- * This is a work in progress, initially started to toy with @octo's [Go bindings for collectd][3]. As stated by the author, the bindings are at early stages of development and they are likely to change, thus breaking this code. Open an issue and I'll do my best to keep up with the upstream changes.
  * As of now the plugin only processes the metrics prefixed with *total*. Feel free to hack this according to your needs.
 
 License
