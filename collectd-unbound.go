@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	osExec "os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,20 +17,73 @@ import (
 
 var (
 	metrics = map[string]string{
-		"num_queries":              "derive",
-		"num_cachehits":            "derive",
-		"num_cachemiss":            "derive",
-		"num_prefetch":             "derive",
-		"num_zero_ttl":             "derive",
-		"num_recursivereplies":     "derive",
-		"requestlist_avg":          "gauge",
-		"requestlist_max":          "derive",
-		"requestlist_overwritten":  "derive",
-		"requestlist_exceeded":     "derive",
-		"requestlist_current_all":  "derive",
-		"requestlist_current_user": "derive",
-		"recursion_time_avg":       "gauge",
-		"recursion_time_median":    "gauge",
+		"*.num.queries":                 "derive",
+		"*.num.queries_ip_ratelimited":  "derive",
+		"*.num.cachehits":               "derive",
+		"*.num.cachemiss":               "derive",
+		"*.num.prefetch":                "derive",
+		"*.num.zero_ttl":                "derive",
+		"*.num.recursivereplies":        "derive",
+		"*.num.request":                 "derive",
+		"*.requestlist.avg":             "gauge",
+		"*.requestlist.max":             "derive",
+		"*.requestlist.overwritten":     "derive",
+		"*.requestlist.exceeded":        "derive",
+		"*.requestlist.current.all":     "derive",
+		"*.requestlist.current.user":    "derive",
+		"*.recursion.time.avg":          "gauge",
+		"*.recursion.time.median":       "gauge",
+		"*.tcpusage":                    "gauge",
+		"mem.cache.rrset":               "gauge",
+		"mem.cache.message":             "gauge",
+		"mem.mod.iterator":              "gauge",
+		"mem.mod.validator":             "gauge",
+		"mem.mod.respip":                "gauge",
+		"mem.streamwait":                "gauge",
+		"num.query.type.A":              "derive",
+		"num.query.type.SOA":            "derive",
+		"num.query.type.PTR":            "derive",
+		"num.query.type.TXT":            "derive",
+		"num.query.type.AAAA":           "derive",
+		"num.query.type.SRV":            "derive",
+		"num.query.class.IN":            "derive",
+		"num.query.opcode.QUERY":        "derive",
+		"num.query.tcp":                 "derive",
+		"num.query.tcpout":              "derive",
+		"num.query.tls":                 "derive",
+		"num.query.tls.resume":          "derive",
+		"num.query.ipv6":                "derive",
+		"num.query.flags.QR":            "derive",
+		"num.query.flags.AA":            "derive",
+		"num.query.flags.TC":            "derive",
+		"num.query.flags.RD":            "derive",
+		"num.query.flags.RA":            "derive",
+		"num.query.flags.Z":             "derive",
+		"num.query.flags.AD":            "derive",
+		"num.query.flags.CD":            "derive",
+		"num.query.edns.present":        "derive",
+		"num.query.edns.DO":             "derive",
+		"num.answer.rcode.NOERROR":      "derive",
+		"num.answer.rcode.FORMERR":      "derive",
+		"num.answer.rcode.SERVFAIL":     "derive",
+		"num.answer.rcode.NXDOMAIN":     "derive",
+		"num.answer.rcode.NOTIMPL":      "derive",
+		"num.answer.rcode.REFUSED":      "derive",
+		"num.answer.rcode.nodata":       "derive",
+		"num.query.ratelimited":         "derive",
+		"num.answer.secure":             "derive",
+		"num.answer.bogus":              "derive",
+		"num.rrset.bogus":               "derive",
+		"num.query.aggressive.NOERROR":  "derive",
+		"num.query.aggressive.NXDOMAIN": "derive",
+		"unwanted.queries":              "derive",
+		"unwanted.replies":              "derive",
+		"msg.cache.count":               "gauge",
+		"rrset.cache.count":             "gauge",
+		"infra.cache.count":             "gauge",
+		"key.cache.count":               "gauge",
+		"num.query.authzone.up":         "derive",
+		"num.query.authzone.down":       "derive",
 	}
 )
 
@@ -55,22 +109,26 @@ func unboundStats(ctx context.Context, interval time.Duration) {
 	scanner := bufio.NewScanner(buf)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "total.") {
-			continue
-		}
 
 		fields := strings.SplitN(line, "=", 2)
 		if len(fields) != 2 {
 			continue
 		}
 
-		metric := fields[0]
-		metric = strings.TrimPrefix(metric, "total.")
-		metric = strings.Replace(metric, ".", "_", -1)
+		metric := fields[0] //eg: thread0.num.queries
 
-		if _, ok := metrics[metric]; !ok {
+		pattern := find(metrics, metric)
+		if pattern == "" {
+			// unknown metric
 			continue
 		}
+		if _, ok := metrics[pattern]; !ok {
+			continue
+		}
+
+		// backwards compatibility with https://github.com/falzm/collectd-unbound by removing 'total' prefix
+		metric = strings.TrimPrefix(metric, "total.")
+		metric = strings.Replace(metric, ".", "_", -1)
 
 		value, err := strconv.ParseFloat(fields[1], 64)
 		if err != nil {
@@ -78,7 +136,7 @@ func unboundStats(ctx context.Context, interval time.Duration) {
 			continue
 		}
 
-		switch metrics[metric] {
+		switch metrics[pattern] {
 		case "derive":
 			vl = &api.ValueList{
 				Identifier: api.Identifier{
@@ -108,4 +166,13 @@ func unboundStats(ctx context.Context, interval time.Duration) {
 
 		exec.Putval.Write(ctx, vl)
 	}
+}
+
+func find(metrics map[string]string, metric string) string {
+	for pattern := range metrics {
+		if match, _ := filepath.Match(pattern, metric); match {
+			return pattern
+		}
+	}
+	return ""
 }
